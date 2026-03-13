@@ -24,24 +24,24 @@ Onomastica Research Lab is a next-generation genealogical and etymological AI ag
 
 ```mermaid
 graph TD
-    User([User]) -->|Enters Name| UI[React Frontend]
-    UI -->|Hosted on| GCR[Google Cloud Run]
+    User(["User"]) -->|"Enters Name"| UI["React Frontend"]
+    UI -->|"Hosted on"| GCR["Google Cloud Run"]
     
-    subgraph Google Cloud
+    subgraph GC ["Google Cloud"]
         GCR
     end
     
-    UI -->|@google/genai SDK| API{Gemini API}
+    UI -->|"@google/genai SDK"| API{"Gemini API"}
     
-    subgraph Multimodal AI Agents
-        API -->|Research & Reasoning| Pro[gemini-3.1-pro-preview]
-        API -->|Historical Illustrations| Img[gemini-2.5-flash-image]
-        API -->|Voice Narration| TTS[gemini-2.5-flash-preview-tts]
+    subgraph Agents ["Multimodal AI Agents"]
+        API -->|"Research & Reasoning"| Pro["gemini-3.1-pro-preview"]
+        API -->|"Historical Illustrations"| Img["gemini-2.5-flash-image"]
+        API -->|"Voice Narration"| TTS["gemini-2.5-flash-preview-tts"]
     end
     
-    Pro -->|Streams JSON Report| UI
-    Img -->|Base64 Image Data| UI
-    TTS -->|WAV Audio Data| UI
+    Pro -->|"Streams JSON Report"| UI
+    Img -->|"Base64 Image Data"| UI
+    TTS -->|"WAV Audio Data"| UI
 ```
 
 ## 🚀 Spin-up Instructions (For Judges)
