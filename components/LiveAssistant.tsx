@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { Mic, MicOff, X, MessageSquare, Volume2, VolumeX } from 'lucide-react';
+import { getApiKey } from '../services/geminiService';
 
 const LiveAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,7 +30,8 @@ const LiveAssistant: React.FC = () => {
   const connect = async () => {
     setIsConnecting(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = await getApiKey();
+      const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
       
       // Use 24000Hz for output, but 16000Hz is standard for input
       audioContextRef.current = new AudioContext({ sampleRate: 24000 });

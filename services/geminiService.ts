@@ -2,11 +2,27 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ResearchFormData, ResearchReport } from "../types";
 
+let cachedApiKey = "";
+export const getApiKey = async (): Promise<string> => {
+  if (cachedApiKey) return cachedApiKey;
+  try {
+    const res = await fetch('/api/config');
+    const data = await res.json();
+    if (data.apiKey) {
+      cachedApiKey = data.apiKey;
+    }
+  } catch (e) {
+    console.error("Failed to fetch API key", e);
+  }
+  return cachedApiKey;
+};
+
 export const generateResearchReportStream = async (
   data: ResearchFormData,
   onUpdate: (partialReport: Partial<ResearchReport>) => void
 ): Promise<ResearchReport> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = await getApiKey();
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
   
   const systemPrompt = `You are a world-class onomastics expert and professional genealogist. 
 Your task is to provide a deep research report on a given name or surname.
@@ -95,7 +111,8 @@ Output: A structured JSON report.
 };
 
 export const generateSectionIllustration = async (name: string, sectionType: string, context: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = await getApiKey();
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
   
   let visualTheme = "";
   switch(sectionType) {
@@ -138,7 +155,8 @@ Style: Classic archival ink sketch or muted atmospheric oil painting on parchmen
 };
 
 export const generateNarration = async (text: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = await getApiKey();
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
   
   // Clean text and truncate to avoid TTS model limits and internal errors
   const cleanText = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
