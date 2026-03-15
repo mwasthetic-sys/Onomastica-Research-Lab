@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ResearchFormData, ResearchReport } from './types';
-import { generateSectionChunks, generateSectionText, generateArchives, generateSectionIllustration, generateNarration } from './services/geminiService';
+import { generateSectionChunks, generateSectionText, generateArchives, generateSectionIllustration, generateNarration, generateOrigin } from './services/geminiService';
 import ResearchForm from './components/ResearchForm';
 import ReportDisplay from './components/ReportDisplay';
 import NameCarousel from './components/NameCarousel';
@@ -20,7 +20,7 @@ const App: React.FC = () => {
     setReport({
       name: data.name,
       facts: data.facts || "None",
-      geography: data.geography || "Unknown",
+      geography: data.geography || "Analyzing...",
       etymology: [],
       geographicDistribution: [],
       socialAnalysis: [],
@@ -44,6 +44,11 @@ const App: React.FC = () => {
         currentReport = { ...currentReport, ...updates };
         setReport(prev => prev ? { ...prev, ...updates } : null);
       };
+
+      // Fire off the origin generation immediately if not provided
+      if (!data.geography) {
+        generateOrigin(data).then(origin => updateReport({ geography: origin })).catch(console.error);
+      }
 
       // Fire off the first image immediately so it's ready
       generateSectionIllustration(data.name, 'etymology').then(img => updateReport({ etymologyImageUrl: img })).catch(console.error);

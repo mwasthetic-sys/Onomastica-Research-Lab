@@ -17,6 +17,36 @@ export const getApiKey = async (): Promise<string> => {
   return cachedApiKey;
 };
 
+export const generateOrigin = async (
+  data: ResearchFormData
+): Promise<string> => {
+  const apiKey = await getApiKey();
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+  
+  const systemPrompt = `You are an expert in onomastics and genealogy.
+Given a name and any provided facts, determine the most likely geographic or cultural origin of the name.
+Respond with ONLY a short phrase (e.g., "Germanic / Western Europe", "West African (Yoruba)", "Japanese", "Unknown"). Do not include any other text.`;
+
+  const userPrompt = `
+Name: ${data.name}
+User-Provided Geography: ${data.geography || "Not provided"}
+Known Facts: ${data.facts || "None"}
+
+What is the origin?`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: userPrompt,
+      config: { systemInstruction: systemPrompt },
+    });
+    return response.text?.trim() || "Unknown";
+  } catch (e) {
+    console.error("Failed to generate origin", e);
+    return "Unknown";
+  }
+};
+
 export const generateSectionText = async (
   data: ResearchFormData,
   sectionName: string,
