@@ -6,15 +6,16 @@ Onomastica Research Lab is a next-generation genealogical and etymological AI ag
 
 ## ✨ Features
 
-*   **Deep Etymological Research:** Uses **Gemini 3.1 Pro** to analyze linguistic roots, geographic distribution, social class history, and spelling variability.
-*   **Interleaved Visual Storytelling:** Uses **Gemini 2.5 Flash Image** to generate highly detailed, context-aware historical illustrations (like antique maps or illuminated manuscripts) that are woven directly into the report.
-*   **Immersive Audio Narration:** Uses **Gemini 2.5 Flash TTS (Text-to-Speech)** to narrate the research findings in a professional, academic voice, creating a truly multimodal experience.
+*   **Deep Etymological Research:** Uses **Gemini 3 Flash** to analyze linguistic roots, geographic distribution, social class history, and spelling variability.
+*   **Interleaved Visual Storytelling:** Uses **Gemini 2.5 Flash Image** to generate highly detailed, context-aware historical illustrations.
+*   **Immersive Audio Narration:** Uses **Gemini 2.5 Flash TTS** to narrate the research findings in a professional, academic voice.
+*   **Live Archival Assistant:** Uses **Gemini 2.5 Flash Native Audio** for real-time, low-latency voice conversations about your lineage.
 *   **Real-time Streaming:** Streams the research report in real-time so users can read along as the agent "thinks" and generates content.
 
 ## 🛠️ Tech Stack
 
 *   **AI SDK:** Official `@google/genai` SDK
-*   **Models:** `gemini-3.1-pro-preview`, `gemini-2.5-flash-image`, `gemini-2.5-flash-preview-tts`
+*   **Models:** `gemini-3-flash-preview`, `gemini-2.5-flash-image`, `gemini-2.5-flash-preview-tts`, `gemini-2.5-flash-native-audio-preview-12-2025`
 *   **Frontend:** React 19, Vite, Tailwind CSS, Framer Motion
 *   **Backend/Hosting:** Express.js, deployed on **Google Cloud Run**
 
@@ -34,14 +35,19 @@ graph TD
     UI -->|"@google/genai SDK"| API{"Gemini API"}
     
     subgraph Agents ["Multimodal AI Agents"]
-        API -->|"Research & Reasoning"| Pro["gemini-3.1-pro-preview"]
+        API -->|"Research & Reasoning"| Pro["gemini-3-flash-preview"]
         API -->|"Historical Illustrations"| Img["gemini-2.5-flash-image"]
         API -->|"Voice Narration"| TTS["gemini-2.5-flash-preview-tts"]
+        API -->|"Real-time Voice Chat"| Live["gemini-2.5-flash-native-audio"]
     end
     
-    Pro -->|"Streams JSON Report"| UI
+    Pro -->|"Streams Research Data"| UI
     Img -->|"Base64 Image Data"| UI
     TTS -->|"WAV Audio Data"| UI
+    Live <-->|"Bi-directional Audio"| UI
+    
+    UI -->|"Background Task"| Origin["Origin Prediction"]
+    Origin -->|"Updates UI"| UI
 ```
 
 ## 🚀 Spin-up Instructions (For Judges)
