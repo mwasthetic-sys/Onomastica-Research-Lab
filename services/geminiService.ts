@@ -18,19 +18,21 @@ export const getApiKey = async (): Promise<string> => {
 };
 
 export const generateOrigin = async (
-  data: ResearchFormData
+  data: ResearchFormData,
+  context: string = ""
 ): Promise<string> => {
   const apiKey = await getApiKey();
   const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
   
   const systemPrompt = `You are an expert in onomastics and genealogy.
-Given a name and any provided facts, determine the most likely geographic or cultural origin of the name.
+Given a name, any provided facts, and some research context, determine the most likely geographic or cultural origin of the name.
 Respond with ONLY a short phrase (e.g., "Germanic / Western Europe", "West African (Yoruba)", "Japanese", "Unknown"). Do not include any other text.`;
 
   const userPrompt = `
 Name: ${data.name}
 User-Provided Geography: ${data.geography || "Not provided"}
 Known Facts: ${data.facts || "None"}
+Research Context: ${context || "None"}
 
 What is the origin?`;
 
@@ -248,10 +250,14 @@ Output: A structured JSON report.
     };
 
     partialReport.geography = extractString('geography');
-    partialReport.etymology = extractString('etymology');
-    partialReport.geographicDistribution = extractString('geographicDistribution');
-    partialReport.socialAnalysis = extractString('socialAnalysis');
-    partialReport.variability = extractString('variability');
+    const ety = extractString('etymology');
+    if (ety) partialReport.etymology = [ety];
+    const geo = extractString('geographicDistribution');
+    if (geo) partialReport.geographicDistribution = [geo];
+    const soc = extractString('socialAnalysis');
+    if (soc) partialReport.socialAnalysis = [soc];
+    const varText = extractString('variability');
+    if (varText) partialReport.variability = [varText];
     
     const archivesMatch = accumulatedText.match(/"archives"\s*:\s*(\[[\s\S]*?\])/);
     if (archivesMatch) {

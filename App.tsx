@@ -45,9 +45,9 @@ const App: React.FC = () => {
         setReport(prev => prev ? { ...prev, ...updates } : null);
       };
 
-      // Fire off the origin generation immediately if not provided
+      // Fire off the origin generation in the background immediately so it doesn't block
       if (!data.geography) {
-        generateOrigin(data).then(origin => updateReport({ geography: origin })).catch(console.error);
+        generateOrigin(data, "").then(origin => updateReport({ geography: origin })).catch(console.error);
       }
 
       // Fire off the first image immediately so it's ready
