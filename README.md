@@ -101,7 +101,7 @@ You can now enter a name (e.g., "Smith", "Tanaka", "García") and watch the mult
 
 This project is containerized and deployed using **Google Cloud Run**, fulfilling the requirement to use at least one Google Cloud service. 
 
-*   **Live URL:** [Insert your .run.app URL here]
+*   **Live URL:** https://onomastica-research-lab-74877842524.europe-west1.run.app/
 *   **Proof of Deployment:** See the included demonstration video or the `server.ts` / `Dockerfile` configurations in this repository.
 
 ## 📝 License

@@ -1,5 +1,5 @@
 {
-  "name": "Remix: Onomastica Research Lab",
+  "name": "Onomastica Research Lab",
   "description": "A sophisticated tool for deep genealogical and onomastic research. Enter a surname or name to receive a detailed etymological report, geographic distribution analysis, and custom-generated historical illustrations.",
   "requestFramePermissions": [
     "microphone"
