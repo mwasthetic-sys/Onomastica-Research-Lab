@@ -17,6 +17,139 @@ export const getApiKey = async (): Promise<string> => {
   return cachedApiKey;
 };
 
+export const generateSectionText = async (
+  data: ResearchFormData,
+  sectionName: string,
+  previousContext: string
+): Promise<string> => {
+  const apiKey = await getApiKey();
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+  
+  const systemPrompt = `You are a world-class onomastics expert and professional genealogist. 
+Your task is to write ONLY the "${sectionName}" section of a deep research report on a given name or surname.
+Do not include markdown headers, formatting, or JSON. Just write the raw paragraphs for this specific section.
+
+CRITICAL INSTRUCTION: Keep your response highly concise and encyclopedic. Limit your response to exactly 1 or 2 short paragraphs (maximum 75-100 words). Do not write a long essay.`;
+
+  const userPrompt = `
+Context:
+Name(s): ${data.name}
+User-Provided Geography: ${data.geography || "Not provided"}.
+Known Facts: ${data.facts || "No additional facts provided."}.
+
+Previous Sections Generated (for context):
+${previousContext || "None yet."}
+
+Please write the concise "${sectionName}" section now.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: userPrompt,
+    config: { systemInstruction: systemPrompt },
+  });
+
+  return response.text || "";
+};
+
+export const generateSectionChunks = async (
+  data: ResearchFormData,
+  sectionName: string,
+  previousContext: string,
+  onSentence: (sentence: string, index: number) => void
+): Promise<string> => {
+  const apiKey = await getApiKey();
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+  
+  const systemPrompt = `You are a world-class onomastics expert and professional genealogist. 
+Your task is to write ONLY the "${sectionName}" section of a deep research report on a given name or surname.
+Do not include markdown headers, formatting, or JSON. Just write the raw paragraphs for this specific section.
+
+CRITICAL INSTRUCTION: Keep your response highly concise and encyclopedic. Limit your response to exactly 1 or 2 short paragraphs (maximum 75-100 words). Do not write a long essay.`;
+
+  const userPrompt = `
+Context:
+Name(s): ${data.name}
+User-Provided Geography: ${data.geography || "Not provided"}.
+Known Facts: ${data.facts || "No additional facts provided."}.
+
+Previous Sections Generated (for context):
+${previousContext || "None yet."}
+
+Please write the concise "${sectionName}" section now.
+  `;
+
+  const response = await ai.models.generateContentStream({
+    model: 'gemini-3-flash-preview',
+    contents: userPrompt,
+    config: { systemInstruction: systemPrompt },
+  });
+
+  let fullText = "";
+  let buffer = "";
+  let sentenceIndex = 0;
+
+  for await (const chunk of response) {
+    const text = chunk.text;
+    if (text) {
+      buffer += text;
+      fullText += text;
+      
+      let match;
+      const sentenceRegex = /([.?!])(?:\s+|\n|$)/g;
+      
+      while ((match = sentenceRegex.exec(buffer)) !== null) {
+        const splitIndex = match.index + 1;
+        const sentence = buffer.substring(0, splitIndex).trim();
+        if (sentence.length > 0 && /[a-zA-Z0-9]/.test(sentence)) {
+          onSentence(sentence, sentenceIndex++);
+        }
+        buffer = buffer.substring(splitIndex).trimStart();
+        sentenceRegex.lastIndex = 0;
+      }
+    }
+  }
+  
+  if (buffer.trim().length > 0 && /[a-zA-Z0-9]/.test(buffer)) {
+    onSentence(buffer.trim(), sentenceIndex++);
+  }
+
+  return fullText;
+};
+
+export const generateArchives = async (
+  data: ResearchFormData,
+  previousContext: string
+): Promise<{name: string, url: string}[]> => {
+  const apiKey = await getApiKey();
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+  
+  const systemPrompt = `You are a world-class onomastics expert. 
+List 4 specific historical archives or repositories (e.g., National Archives, church records) relevant to the name researched.
+Output ONLY valid JSON. The JSON must be an array of objects with "name" and "url" strings.`;
+
+  const userPrompt = `
+Name: ${data.name}
+Context: ${previousContext.substring(0, 500)}
+
+Output the JSON array of 4 archives now.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: userPrompt,
+    config: { systemInstruction: systemPrompt },
+  });
+
+  try {
+    const cleanJsonText = (response.text || "").replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanJsonText);
+  } catch (e) {
+    console.error("Failed to parse archives JSON", e);
+    return [];
+  }
+};
+
 export const generateResearchReportStream = async (
   data: ResearchFormData,
   onUpdate: (partialReport: Partial<ResearchReport>) => void
@@ -110,7 +243,7 @@ Output: A structured JSON report.
   };
 };
 
-export const generateSectionIllustration = async (name: string, sectionType: string, context: string): Promise<string> => {
+export const generateSectionIllustration = async (name: string, sectionType: string): Promise<string> => {
   const apiKey = await getApiKey();
   const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
   
@@ -125,7 +258,6 @@ export const generateSectionIllustration = async (name: string, sectionType: str
 
   const prompt = `A highly detailed historical illustration for the name '${name}'. 
 Subject: ${visualTheme} 
-Context from research: ${context.substring(0, 150)}. 
 Style: Classic archival ink sketch or muted atmospheric oil painting on parchment. Elegant and professional. No text in image.`;
 
   const response = await ai.models.generateContent({
@@ -154,102 +286,131 @@ Style: Classic archival ink sketch or muted atmospheric oil painting on parchmen
   throw new Error(`Failed to generate image. Model returned: ${textResponse || 'No image data'}`);
 };
 
-export const generateNarration = async (text: string): Promise<string> => {
+let ttsQuotaExceeded = false;
+
+export const generateNarration = async (text: string, retries = 2): Promise<string> => {
+  if (ttsQuotaExceeded) {
+    throw new Error("TTS_QUOTA_EXCEEDED");
+  }
+
   const apiKey = await getApiKey();
   const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
   
-  // Clean text and truncate to avoid TTS model limits and internal errors
-  const cleanText = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-  const safeText = cleanText.length > 1500 ? cleanText.substring(0, 1500) + "..." : cleanText;
+  // Clean text aggressively to avoid TTS model limits and internal errors
+  let cleanText = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+  cleanText = cleanText.replace(/[*_#]/g, ''); // Remove markdown characters
+  cleanText = cleanText.replace(/\n/g, ' '); // Replace newlines with spaces
+  cleanText = cleanText.replace(/\s+/g, ' ').trim(); // Collapse multiple spaces
   
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: `Say in a professional, slightly academic, but warm and engaging voice: ${safeText}` }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Charon' },
+  // Truncate based on retries to progressively shorten if it keeps failing
+  const maxLength = retries === 2 ? 1200 : (retries === 1 ? 800 : 500);
+  const safeText = cleanText.length > maxLength ? cleanText.substring(0, maxLength) + "..." : cleanText;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `Say in a professional, slightly academic, but warm and engaging voice: ${safeText}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Charon' },
+          },
         },
       },
-    },
-  });
+    });
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (base64Audio) {
-    // Gemini TTS returns raw PCM 24000Hz 16-bit mono. 
-    // We need to add a WAV header so browsers can play it via <audio> tag.
-    const rawData = atob(base64Audio);
-    const numSamples = rawData.length / 2;
-    const sampleRate = 24000;
-    const bitsPerSample = 16;
-    const numChannels = 1;
-    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
-    const blockAlign = numChannels * bitsPerSample / 8;
-    const dataSize = rawData.length;
-    const chunkSize = 36 + dataSize;
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (base64Audio) {
+      // Gemini TTS returns raw PCM 24000Hz 16-bit mono. 
+      // We need to add a WAV header so browsers can play it via <audio> tag.
+      const rawData = atob(base64Audio);
+      const numSamples = rawData.length / 2;
+      const sampleRate = 24000;
+      const bitsPerSample = 16;
+      const numChannels = 1;
+      const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+      const blockAlign = numChannels * bitsPerSample / 8;
+      const dataSize = rawData.length;
+      const chunkSize = 36 + dataSize;
 
-    const header = new ArrayBuffer(44);
-    const view = new DataView(header);
+      const header = new ArrayBuffer(44);
+      const view = new DataView(header);
 
-    // RIFF identifier
-    view.setUint8(0, 'R'.charCodeAt(0));
-    view.setUint8(1, 'I'.charCodeAt(0));
-    view.setUint8(2, 'F'.charCodeAt(0));
-    view.setUint8(3, 'F'.charCodeAt(0));
-    // file length
-    view.setUint32(4, chunkSize, true);
-    // RIFF type
-    view.setUint8(8, 'W'.charCodeAt(0));
-    view.setUint8(9, 'A'.charCodeAt(0));
-    view.setUint8(10, 'V'.charCodeAt(0));
-    view.setUint8(11, 'E'.charCodeAt(0));
-    // format chunk identifier
-    view.setUint8(12, 'f'.charCodeAt(0));
-    view.setUint8(13, 'm'.charCodeAt(0));
-    view.setUint8(14, 't'.charCodeAt(0));
-    view.setUint8(15, ' '.charCodeAt(0));
-    // format chunk length
-    view.setUint32(16, 16, true);
-    // sample format (raw)
-    view.setUint16(20, 1, true);
-    // channel count
-    view.setUint16(22, numChannels, true);
-    // sample rate
-    view.setUint32(24, sampleRate, true);
-    // byte rate (sample rate * block align)
-    view.setUint32(28, byteRate, true);
-    // block align (channel count * bytes per sample)
-    view.setUint16(32, blockAlign, true);
-    // bits per sample
-    view.setUint16(34, bitsPerSample, true);
-    // data chunk identifier
-    view.setUint8(36, 'd'.charCodeAt(0));
-    view.setUint8(37, 'a'.charCodeAt(0));
-    view.setUint8(38, 't'.charCodeAt(0));
-    view.setUint8(39, 'a'.charCodeAt(0));
-    // data chunk length
-    view.setUint32(40, dataSize, true);
+      // RIFF identifier
+      view.setUint8(0, 'R'.charCodeAt(0));
+      view.setUint8(1, 'I'.charCodeAt(0));
+      view.setUint8(2, 'F'.charCodeAt(0));
+      view.setUint8(3, 'F'.charCodeAt(0));
+      // file length
+      view.setUint32(4, chunkSize, true);
+      // RIFF type
+      view.setUint8(8, 'W'.charCodeAt(0));
+      view.setUint8(9, 'A'.charCodeAt(0));
+      view.setUint8(10, 'V'.charCodeAt(0));
+      view.setUint8(11, 'E'.charCodeAt(0));
+      // format chunk identifier
+      view.setUint8(12, 'f'.charCodeAt(0));
+      view.setUint8(13, 'm'.charCodeAt(0));
+      view.setUint8(14, 't'.charCodeAt(0));
+      view.setUint8(15, ' '.charCodeAt(0));
+      // format chunk length
+      view.setUint32(16, 16, true);
+      // sample format (raw)
+      view.setUint16(20, 1, true);
+      // channel count
+      view.setUint16(22, numChannels, true);
+      // sample rate
+      view.setUint32(24, sampleRate, true);
+      // byte rate (sample rate * block align)
+      view.setUint32(28, byteRate, true);
+      // block align (channel count * bytes per sample)
+      view.setUint16(32, blockAlign, true);
+      // bits per sample
+      view.setUint16(34, bitsPerSample, true);
+      // data chunk identifier
+      view.setUint8(36, 'd'.charCodeAt(0));
+      view.setUint8(37, 'a'.charCodeAt(0));
+      view.setUint8(38, 't'.charCodeAt(0));
+      view.setUint8(39, 'a'.charCodeAt(0));
+      // data chunk length
+      view.setUint32(40, dataSize, true);
 
-    const headerUint8 = new Uint8Array(header);
-    const dataUint8 = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; i++) {
-      dataUint8[i] = rawData.charCodeAt(i);
+      const headerUint8 = new Uint8Array(header);
+      const dataUint8 = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; i++) {
+        dataUint8[i] = rawData.charCodeAt(i);
+      }
+
+      const combined = new Uint8Array(headerUint8.length + dataUint8.length);
+      combined.set(headerUint8);
+      combined.set(dataUint8, headerUint8.length);
+
+      let binary = '';
+      const len = combined.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(combined[i]);
+      }
+      const combinedBase64 = btoa(binary);
+      
+      return `data:audio/wav;base64,${combinedBase64}`;
     }
 
-    const combined = new Uint8Array(headerUint8.length + dataUint8.length);
-    combined.set(headerUint8);
-    combined.set(dataUint8, headerUint8.length);
-
-    let binary = '';
-    const len = combined.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(combined[i]);
+    throw new Error("Failed to generate audio");
+  } catch (e: any) {
+    if (e.message?.includes('429') || e.message?.includes('RESOURCE_EXHAUSTED') || e.status === 'RESOURCE_EXHAUSTED') {
+      ttsQuotaExceeded = true;
+      console.warn("Gemini TTS Quota Exceeded. Falling back to browser TTS.");
+      throw new Error("TTS_QUOTA_EXCEEDED");
     }
-    const combinedBase64 = btoa(binary);
     
-    return `data:audio/wav;base64,${combinedBase64}`;
+    // Handle 500 Internal Errors with retries
+    if ((e.message?.includes('500') || e.message?.includes('Internal error') || e.status === 'INTERNAL') && retries > 0) {
+      console.warn(`TTS 500 Internal Error. Retrying... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s before retry
+      return generateNarration(text, retries - 1);
+    }
+    
+    throw e;
   }
-
-  throw new Error("Failed to generate audio");
 };

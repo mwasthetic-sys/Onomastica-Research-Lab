@@ -195,7 +195,7 @@ const LiveAssistant: React.FC = () => {
         className="fixed bottom-24 right-4 z-50 bg-amber-800 text-white p-4 rounded-full shadow-2xl hover:bg-amber-900 transition-all transform hover:scale-110 flex items-center space-x-2"
       >
         <Mic className="w-6 h-6" />
-        <span className="font-bold text-sm pr-2">Ask Live</span>
+        <span className="font-bold text-sm pr-2">Ask</span>
       </button>
 
       {isOpen && (

@@ -67,6 +67,35 @@ interface Props {
   onNameClick?: (name: string) => void;
 }
 
+const Row = ({ names, speed, direction, onNameClick }: { names: string[], speed: number, direction: 'left' | 'right', onNameClick?: (name: string) => void }) => (
+  <div className="flex overflow-hidden whitespace-nowrap py-4 select-none opacity-80 hover:opacity-100 transition-opacity">
+    <div 
+      className="flex min-w-max items-center hover:[animation-play-state:paused]"
+      style={{ animation: `marquee-${direction} ${speed}s linear infinite` }}
+    >
+      {names.map((name, i) => (
+        <span 
+          key={i} 
+          onClick={() => onNameClick && onNameClick(name)}
+          className={`mx-6 text-2xl md:text-3xl font-bold text-stone-400 hover:text-[#D97706] transition-colors ${onNameClick ? 'cursor-pointer' : 'cursor-default'}`}
+        >
+          {name}
+        </span>
+      ))}
+      {/* Duplicate for seamless loop */}
+      {names.map((name, i) => (
+        <span 
+          key={`dup-${i}`} 
+          onClick={() => onNameClick && onNameClick(name)}
+          className={`mx-6 text-2xl md:text-3xl font-bold text-stone-400 hover:text-[#D97706] transition-colors ${onNameClick ? 'cursor-pointer' : 'cursor-default'}`}
+        >
+          {name}
+        </span>
+      ))}
+    </div>
+  </div>
+);
+
 const NameCarousel: React.FC<Props> = ({ onNameClick }) => {
   // Use a fixed seed or just shuffle once on mount to avoid hydration mismatch if using SSR, 
   // but here it's purely client-side React.
@@ -92,53 +121,24 @@ const NameCarousel: React.FC<Props> = ({ onNameClick }) => {
   const row14 = shuffled.slice(520, 560);
   const row15 = shuffled.slice(560, 600);
 
-  const Row = ({ names, speed, direction }: { names: string[], speed: number, direction: 'left' | 'right' }) => (
-    <div className="flex overflow-hidden whitespace-nowrap py-4 select-none opacity-80 hover:opacity-100 transition-opacity">
-      <div 
-        className="flex min-w-max items-center hover:[animation-play-state:paused]"
-        style={{ animation: `marquee-${direction} ${speed}s linear infinite` }}
-      >
-        {names.map((name, i) => (
-          <span 
-            key={i} 
-            onClick={() => onNameClick && onNameClick(name)}
-            className={`mx-6 text-2xl md:text-3xl font-bold text-stone-400 hover:text-[#D97706] transition-colors ${onNameClick ? 'cursor-pointer' : 'cursor-default'}`}
-          >
-            {name}
-          </span>
-        ))}
-        {/* Duplicate for seamless loop */}
-        {names.map((name, i) => (
-          <span 
-            key={`dup-${i}`} 
-            onClick={() => onNameClick && onNameClick(name)}
-            className={`mx-6 text-2xl md:text-3xl font-bold text-stone-400 hover:text-[#D97706] transition-colors ${onNameClick ? 'cursor-pointer' : 'cursor-default'}`}
-          >
-            {name}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div className="w-full h-full py-12 overflow-hidden relative flex flex-col justify-center">
       <div className="transform -rotate-2 scale-125 relative z-0">
-        <Row names={row1} speed={250} direction="left" />
-        <Row names={row2} speed={220} direction="right" />
-        <Row names={row3} speed={280} direction="left" />
-        <Row names={row4} speed={240} direction="right" />
-        <Row names={row5} speed={260} direction="left" />
-        <Row names={row6} speed={230} direction="right" />
-        <Row names={row7} speed={270} direction="left" />
-        <Row names={row8} speed={210} direction="right" />
-        <Row names={row9} speed={290} direction="left" />
-        <Row names={row10} speed={250} direction="right" />
-        <Row names={row11} speed={230} direction="left" />
-        <Row names={row12} speed={260} direction="right" />
-        <Row names={row13} speed={240} direction="left" />
-        <Row names={row14} speed={280} direction="right" />
-        <Row names={row15} speed={220} direction="left" />
+        <Row names={row1} speed={250} direction="left" onNameClick={onNameClick} />
+        <Row names={row2} speed={220} direction="right" onNameClick={onNameClick} />
+        <Row names={row3} speed={280} direction="left" onNameClick={onNameClick} />
+        <Row names={row4} speed={240} direction="right" onNameClick={onNameClick} />
+        <Row names={row5} speed={260} direction="left" onNameClick={onNameClick} />
+        <Row names={row6} speed={230} direction="right" onNameClick={onNameClick} />
+        <Row names={row7} speed={270} direction="left" onNameClick={onNameClick} />
+        <Row names={row8} speed={210} direction="right" onNameClick={onNameClick} />
+        <Row names={row9} speed={290} direction="left" onNameClick={onNameClick} />
+        <Row names={row10} speed={250} direction="right" onNameClick={onNameClick} />
+        <Row names={row11} speed={230} direction="left" onNameClick={onNameClick} />
+        <Row names={row12} speed={260} direction="right" onNameClick={onNameClick} />
+        <Row names={row13} speed={240} direction="left" onNameClick={onNameClick} />
+        <Row names={row14} speed={280} direction="right" onNameClick={onNameClick} />
+        <Row names={row15} speed={220} direction="left" onNameClick={onNameClick} />
       </div>
     </div>
   );

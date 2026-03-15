@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ResearchFormData, ResearchReport } from './types';
-import { generateResearchReportStream, generateSectionIllustration, generateNarration } from './services/geminiService';
+import { generateSectionChunks, generateSectionText, generateArchives, generateSectionIllustration, generateNarration } from './services/geminiService';
 import ResearchForm from './components/ResearchForm';
 import ReportDisplay from './components/ReportDisplay';
 import NameCarousel from './components/NameCarousel';
@@ -15,91 +15,170 @@ const App: React.FC = () => {
   const handleResearch = async (data: ResearchFormData) => {
     setIsLoading(true);
     setError(null);
-    setReport(null);
+    
+    // Initialize empty report to show the UI immediately
+    setReport({
+      name: data.name,
+      facts: data.facts || "None",
+      geography: data.geography || "Unknown",
+      etymology: [],
+      geographicDistribution: [],
+      socialAnalysis: [],
+      variability: [],
+      archives: [],
+      etymologyAudioUrls: [],
+      geoAudioUrls: [],
+      socialAudioUrls: [],
+      variabilityAudioUrls: [],
+    });
+    
+    // We can stop the global loading spinner since the report UI will handle the progressive loading
+    setIsLoading(false);
 
     try {
-      // Step 1: Generate the primary text report with streaming
-      const textReport = await generateResearchReportStream(data, (partial) => {
-        setReport(prev => {
-          if (!prev) {
-            return {
-              name: data.name,
-              facts: data.facts || "None",
-              geography: partial.geography || "",
-              etymology: partial.etymology || "",
-              geographicDistribution: partial.geographicDistribution || "",
-              socialAnalysis: partial.socialAnalysis || "",
-              variability: partial.variability || "",
-              archives: partial.archives || [],
-            };
-          }
-          return {
-            ...prev,
-            geography: partial.geography || prev.geography,
-            etymology: partial.etymology || prev.etymology,
-            geographicDistribution: partial.geographicDistribution || prev.geographicDistribution,
-            socialAnalysis: partial.socialAnalysis || prev.socialAnalysis,
-            variability: partial.variability || prev.variability,
-            archives: partial.archives || prev.archives,
-          };
-        });
-      });
-
-      // Step 2: Kick off image generation processes in parallel
-      const name = data.name;
-
-      generateSectionIllustration(name, 'header', textReport.etymology).then(url => {
-        setReport(prev => prev ? { ...prev, headerImageUrl: url } : null);
-      }).catch(console.error);
-
-      generateSectionIllustration(name, 'etymology', textReport.etymology).then(url => {
-        setReport(prev => prev ? { ...prev, etymologyImageUrl: url } : null);
-      }).catch(console.error);
-
-      generateSectionIllustration(name, 'geography', textReport.geographicDistribution).then(url => {
-        setReport(prev => prev ? { ...prev, geoImageUrl: url } : null);
-      }).catch(console.error);
-
-      generateSectionIllustration(name, 'social', textReport.socialAnalysis).then(url => {
-        setReport(prev => prev ? { ...prev, socialImageUrl: url } : null);
-      }).catch(console.error);
-
-      generateSectionIllustration(name, 'variability', textReport.variability).then(url => {
-        setReport(prev => prev ? { ...prev, variabilityImageUrl: url } : null);
-      }).catch(console.error);
-
-      // Step 3: Sequential Narration Generation in the background
-      const generateAllNarrations = async () => {
-        try {
-          const etymologyAudio = await generateNarration(textReport.etymology);
-          setReport(prev => prev ? { ...prev, etymologyAudioUrl: etymologyAudio } : null);
-
-          const geoAudio = await generateNarration(textReport.geographicDistribution);
-          setReport(prev => prev ? { ...prev, geoAudioUrl: geoAudio } : null);
-
-          const socialAudio = await generateNarration(textReport.socialAnalysis);
-          setReport(prev => prev ? { ...prev, socialAudioUrl: socialAudio } : null);
-
-          const variabilityAudio = await generateNarration(textReport.variability);
-          setReport(prev => prev ? { ...prev, variabilityAudioUrl: variabilityAudio } : null);
-        } catch (err) {
-          console.error("Narration generation failed:", err);
-        }
+      let currentReport: Partial<ResearchReport> = {};
+      let context = "";
+      let audioQueue = Promise.resolve();
+      
+      const updateReport = (updates: Partial<ResearchReport>) => {
+        currentReport = { ...currentReport, ...updates };
+        setReport(prev => prev ? { ...prev, ...updates } : null);
       };
 
-      generateAllNarrations();
+      // Fire off the first image immediately so it's ready
+      generateSectionIllustration(data.name, 'etymology').then(img => updateReport({ etymologyImageUrl: img })).catch(console.error);
+
+      // Queue the rest of the images to avoid hitting the browser's 6-connection limit
+      // which was blocking the TTS audio requests from firing
+      let imageQueue = Promise.resolve();
+      const queueImage = (section: string, key: string) => {
+        imageQueue = imageQueue.then(async () => {
+          try {
+            const img = await generateSectionIllustration(data.name, section);
+            updateReport({ [key]: img });
+          } catch (e) {
+            console.error(`Failed to generate image for ${section}`, e);
+          }
+        });
+      };
+
+      queueImage('geography', 'geoImageUrl');
+      queueImage('social', 'socialImageUrl');
+      queueImage('variability', 'variabilityImageUrl');
+      queueImage('header', 'headerImageUrl');
+
+      // Helper for streaming section (Section 1)
+      const processSectionStreaming = async (
+        sectionName: string, 
+        textKey: 'etymology',
+        audioKey: 'etymologyAudioUrls',
+        completeKey: 'etymologyComplete',
+        contextLabel: string
+      ) => {
+        const textArray: string[] = [];
+        const audioArray: string[] = [];
+        
+        const fullText = await generateSectionChunks(data, sectionName, context, (sentence, index) => {
+          textArray[index] = sentence;
+          updateReport({ [textKey]: [...textArray] });
+          
+          audioQueue = audioQueue.then(async () => {
+            try {
+              const audioUrl = await generateNarration(sentence);
+              audioArray[index] = audioUrl;
+              updateReport({ [audioKey]: [...audioArray] });
+            } catch (e) {
+              console.error(`Narration failed for ${textKey} sentence`, index, e);
+              audioArray[index] = "FAILED";
+              updateReport({ [audioKey]: [...audioArray] });
+            }
+          });
+        });
+        
+        updateReport({ [completeKey]: true });
+        context += `\n${contextLabel}: ${fullText}`;
+          
+        return fullText;
+      };
+
+      // Helper for batch section (Sections 2-4)
+      const processSectionBatch = async (
+        sectionName: string, 
+        textKey: 'geographicDistribution' | 'socialAnalysis' | 'variability',
+        audioKey: 'geoAudioUrls' | 'socialAudioUrls' | 'variabilityAudioUrls',
+        completeKey: 'geoComplete' | 'socialComplete' | 'variabilityComplete',
+        contextLabel: string
+      ) => {
+        const fullText = await generateSectionText(data, sectionName, context);
+        updateReport({ [textKey]: [fullText] });
+        
+        audioQueue = audioQueue.then(async () => {
+          try {
+            const audioUrl = await generateNarration(fullText);
+            updateReport({ [audioKey]: [audioUrl] });
+          } catch (e) {
+            console.error(`Narration failed for ${textKey}`, e);
+            updateReport({ [audioKey]: ["FAILED"] });
+          }
+        });
+        
+        updateReport({ [completeKey]: true });
+        context += `\n${contextLabel}: ${fullText}`;
+          
+        return fullText;
+      };
+
+      // 1. Etymology (Streaming)
+      const etyText = await processSectionStreaming(
+        "Etymology (linguistic roots and origins)", 
+        'etymology', 
+        'etymologyAudioUrls', 
+        'etymologyComplete',
+        'Etymology'
+      );
+
+      // 2. Geography (Batch)
+      const geoText = await processSectionBatch(
+        "Geographic Distribution (historical hubs prior to 20th century)", 
+        'geographicDistribution', 
+        'geoAudioUrls', 
+        'geoComplete',
+        'Geography'
+      );
+
+      // 3. Social (Batch)
+      const socText = await processSectionBatch(
+        "Social Analysis (social classes or groups)", 
+        'socialAnalysis', 
+        'socialAudioUrls', 
+        'socialComplete',
+        'Social'
+      );
+
+      // 4. Variability (Batch)
+      const varText = await processSectionBatch(
+        "Variability (phonetic distortions and spelling variations)", 
+        'variability', 
+        'variabilityAudioUrls', 
+        'variabilityComplete',
+        'Variability'
+      );
+
+      // 5. Archives
+      const archives = await generateArchives(data, context);
+      updateReport({ archives });
 
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Archive access failed. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
+  const isNarrationReady = !!(report && report.etymologyAudioUrls && report.etymologyAudioUrls.length > 0);
+
   return (
     <div className="min-h-screen pb-20 selection:bg-amber-100 selection:text-amber-900 bg-stone-50 relative overflow-hidden">
-      {!report && (
+      {(!report || !isNarrationReady) && (
         <div className="fixed inset-0 z-0 pointer-events-auto overflow-hidden flex flex-col justify-center">
           <NameCarousel onNameClick={isLoading ? undefined : (name) => {
             setSelectedName({ value: name, timestamp: Date.now() });
@@ -134,7 +213,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {isLoading && !report && (
+        {((isLoading && !report) || (report && !isNarrationReady)) && (
           <div className="max-w-2xl mx-auto text-center py-20 space-y-6 pointer-events-auto">
             <div className="relative w-40 h-40 mx-auto">
               <div className="absolute inset-0 rounded-full border-4 border-amber-100 border-t-amber-800 animate-spin"></div>
@@ -160,7 +239,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {report && (
+        {isNarrationReady && report && (
           <div className="pb-20 pointer-events-auto">
             <ReportDisplay report={report} />
             <div className="no-print mt-12 text-center">
